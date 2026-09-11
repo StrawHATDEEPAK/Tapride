@@ -18,11 +18,22 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
+  
+    private final String[] allowedOrigins = {
+            "http://localhost:8085",
+            "https://tapride.local",
+            "http://tapride.local"
+    };
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("http://localhost:8085", "https://tapride.local", "http://tapride.local")
+                .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "PUT", "DELETE")
                 .allowedHeaders("*");
+
+        registry.addMapping("/actuator/health")
+                .allowedOrigins(allowedOrigins)
+                .allowedMethods("GET");
     }
 }
