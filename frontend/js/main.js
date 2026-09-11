@@ -5,6 +5,7 @@ import { initFeedRenderer } from './render-feed.js';
 import { initDetailRenderer } from './render-detail.js';
 import { initMapRenderer } from './render-map.js';
 import { initChaosPanel } from './chaos-panel.js';
+import { initServerHealth } from './server-health.js';
 
 async function main() {
     let CONFIG;
@@ -29,7 +30,9 @@ async function main() {
     initFeedRenderer();
     initDetailRenderer();
     initChaosPanel(CONFIG);
+    initServerHealth(CONFIG);
     initBookingForm(CONFIG);
+    
 
     connectWebSocket(
         CONFIG.API.NOTIFICATION_WS,
