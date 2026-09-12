@@ -1,11 +1,5 @@
-import { store } from './state.js';
+import { store, haversine } from './state.js';
 
-/**
- * The saga's real stages, in real order - this is what makes the ladder
- * meaningful rather than decorative numbering. Each stop's "done" event and
- * (where applicable) "fail" event come straight from order-service's own
- * RideEventType enum - see order-service/src/.../domain/RideEventType.java.
- */
 const STOPS = [
     { label: 'Requested', done: 'RIDE_REQUESTED' },
     { label: 'Validated', done: 'RIDE_VALIDATED', fail: 'RIDE_VALIDATION_FAILED' },
@@ -15,6 +9,14 @@ const STOPS = [
     { label: 'Completed', done: 'RIDE_COMPLETED' },
 ];
 
+// Matches matching-service's DriverLocationSimulator constants exactly
+// (STEP_FRACTION, tick interval, arrival threshold) - see that class - so
+// the ETA estimate reflects the ACTUAL simulated decay curve, not a generic
+// assumed speed. If those constants change on the backend, update here too.
+const SIM_STEP_FRACTION = 0.15;
+const SIM_TICK_SECONDS = 4;
+const SIM_ARRIVAL_THRESHOLD_KM = 0.111; // ~0.001 degrees at the equator
+
 function stopState(ride, stop) {
     if (stop.fail && ride.seen.has(stop.fail)) return 'failed';
     if (ride.seen.has(stop.done)) return 'done';
@@ -22,11 +24,37 @@ function stopState(ride, stop) {
 }
 
 function formatTime(iso) {
-    try {
-        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch {
-        return '';
+    if (!iso) return '';
+    // Java's Instant.toString() can emit nanosecond precision - JS Date only
+    // reliably parses millisecond precision; trim before parsing.
+    const trimmed = iso.replace(/(\.\d{3})\d*(Z|[+-]\d{2}:?\d{2})?$/, '$1$2');
+    const date = new Date(trimmed);
+    return isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/** Returns { percent, etaSeconds } for the CURRENT leg, or null if there's nothing to show yet. */
+function computeProgress(ride) {
+    if (!ride.driverPos || ride.legStartDistance == null) return null;
+
+    const target = ride.seen.has('RIDE_STARTED') ? ride.dropoff : ride.pickup;
+    if (!target) return null;
+
+    const currentDistance = haversine(ride.driverPos, target);
+    const percent = Math.max(0, Math.min(100, Math.round((1 - currentDistance / ride.legStartDistance) * 100)));
+
+    let etaSeconds = 0;
+    if (currentDistance > SIM_ARRIVAL_THRESHOLD_KM) {
+        const ticksRemaining = Math.log(SIM_ARRIVAL_THRESHOLD_KM / currentDistance) / Math.log(1 - SIM_STEP_FRACTION);
+        etaSeconds = Math.max(0, Math.ceil(ticksRemaining)) * SIM_TICK_SECONDS;
     }
+
+    return { percent, etaSeconds };
+}
+
+function formatEta(seconds) {
+    if (seconds <= 0) return 'Arriving now';
+    if (seconds < 60) return `~${seconds}s away`;
+    return `~${Math.round(seconds / 60)} min away`;
 }
 
 export function initDetailRenderer() {
@@ -41,9 +69,7 @@ export function initDetailRenderer() {
 
         const states = STOPS.map((stop) => stopState(ride, stop));
         let activeIndex = -1;
-        if (!ride.failed) {
-            activeIndex = states.findIndex((s) => s === 'pending');
-        }
+        if (!ride.failed) activeIndex = states.findIndex((s) => s === 'pending');
 
         const ladderHtml = STOPS.map((stop, i) => {
             let cls;
@@ -65,6 +91,19 @@ export function initDetailRenderer() {
             `;
         }).join('');
 
+        const progress = !ride.failed && ride.status !== 'RIDE_COMPLETED' ? computeProgress(ride) : null;
+        const progressHtml = progress ? `
+            <div class="progress-block">
+                <div class="progress-header">
+                    <span>${ride.seen.has('RIDE_STARTED') ? 'En route to dropoff' : 'Driver en route to pickup'}</span>
+                    <span class="mono text-dim">${formatEta(progress.etaSeconds)}</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width: ${progress.percent}%;"></div>
+                </div>
+            </div>
+        ` : '';
+
         container.innerHTML = `
             <div class="card mono" style="font-size: var(--text-xs); margin-bottom: var(--space-4);">
                 <div class="text-dim">Ride ID</div>
@@ -72,11 +111,18 @@ export function initDetailRenderer() {
                 ${ride.driverId ? `<div class="text-dim" style="margin-top: var(--space-2);">Driver ID</div><div>${ride.driverId}</div>` : ''}
                 ${ride.failed ? `<div class="text-dim" style="margin-top: var(--space-2);">Reason</div><div style="color: var(--color-coral);">${ride.failReason}</div>` : ''}
             </div>
+            ${progressHtml}
             <div class="status-ladder">${ladderHtml}</div>
         `;
     }
 
     store.addEventListener('change', render);
     store.addEventListener('select', render);
+    store.addEventListener('position', () => {
+        // Only re-render for position ticks on the CURRENTLY selected ride -
+        // otherwise every ride's location tick would repaint this panel
+        // even when looking at a different ride entirely.
+        render();
+    });
     render();
 }

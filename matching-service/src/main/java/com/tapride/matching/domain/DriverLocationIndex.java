@@ -6,10 +6,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.GeoOperations;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Thin wrapper around Redis's GEO commands (GEOADD/GEOSEARCH), which is what
@@ -17,8 +18,7 @@ import java.util.concurrent.TimeUnit;
  * driver and compute distance in Java". Redis maintains the drivers as points
  * on a geohash-indexed sorted set, so "find nearest available driver within
  * radius" is a single O(log N) native command instead of an application-level
- * table scan - this is the same primitive Redis's own docs use ride-hailing
- * as the canonical example for.
+ * table scan.
  *
  * Two separate Redis keys:
  *   - "drivers:available" (GEO set)  - only drivers currently free to be matched
@@ -35,8 +35,10 @@ public class DriverLocationIndex {
     private static final String LOCATION_KEY = "drivers:location";
 
     private final GeoOperations<String, String> geoOps;
+    private final StringRedisTemplate redisTemplate;
 
     public DriverLocationIndex(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
         this.geoOps = redisTemplate.opsForGeo();
     }
 
@@ -80,5 +82,38 @@ public class DriverLocationIndex {
             return Optional.empty();
         }
         return Optional.of(points.get(0));
+    }
+
+    /**
+     * Every currently-available driver's position - used by the frontend to
+     * show "drivers near you" on the map BEFORE a ride is even booked, so a
+     * visitor can see the fleet is real and nearby, not just trust that it exists.
+     *
+     * Redis GEO sets are implemented as sorted sets scored by geohash - there's
+     * no single native "give me every member with its position" GEO command,
+     * so this is a two-step fetch: list all member IDs via the underlying
+     * ZSET, then batch-resolve their positions via GEOPOS (geoOps.position
+     * accepts multiple members in one call, avoiding N round trips).
+     */
+    public List<AvailableDriverLocation> listAvailableDrivers() {
+        Set<String> driverIds = redisTemplate.opsForZSet().range(AVAILABLE_KEY, 0, -1);
+        if (driverIds == null || driverIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<Point> positions = geoOps.position(AVAILABLE_KEY, driverIds.toArray(new String[0]));
+        List<AvailableDriverLocation> result = new ArrayList<>();
+        int i = 0;
+        for (String driverId : driverIds) {
+            Point p = (positions != null && i < positions.size()) ? positions.get(i) : null;
+            if (p != null) {
+                result.add(new AvailableDriverLocation(UUID.fromString(driverId), p.getY(), p.getX()));
+            }
+            i++;
+        }
+        return result;
+    }
+
+    public record AvailableDriverLocation(UUID driverId, double lat, double lng) {
     }
 }
