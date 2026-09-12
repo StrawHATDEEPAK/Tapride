@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
@@ -10,11 +10,11 @@ spring:
       enabled: true
 
   datasource:
-    url: jdbc:postgresql://localhost:5434/payment_db
-    username: payment_user
-    password: payment_pass
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
-      maximum-pool-size: 10
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:3}
 
   jpa:
     hibernate:
@@ -29,11 +29,15 @@ spring:
     locations: classpath:db/migration
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
 
   jackson:
     default-property-inclusion: non_null
 
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
+    
 management:
   endpoints:
     web:
@@ -58,7 +62,7 @@ management:
       probability: 1.0
   otlp:
     tracing:
-      endpoint: http://localhost:4318/v1/traces
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
 
 # Baseline chaos config - overridable at runtime via PUT /api/chaos (see ChaosSettings).
 payment:

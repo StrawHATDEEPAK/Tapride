@@ -138,12 +138,8 @@ services:
         condition: service_healthy
     ports:
       - "8081:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://order-db:5432/order_db
-      SPRING_DATASOURCE_USERNAME: order_user
-      SPRING_DATASOURCE_PASSWORD: order_pass
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+    env_file:
+      - ./order-service/.env
     networks: [tapride-net]
 
   payment-service:
@@ -158,12 +154,8 @@ services:
         condition: service_healthy
     ports:
       - "8082:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://payment-db:5432/payment_db
-      SPRING_DATASOURCE_USERNAME: payment_user
-      SPRING_DATASOURCE_PASSWORD: payment_pass
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+    env_file:
+      - ./payment-service/.env
     networks: [tapride-net]
 
   matching-service:
@@ -180,14 +172,8 @@ services:
         condition: service_healthy
     ports:
       - "8083:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://matching-db:5432/matching_db
-      SPRING_DATASOURCE_USERNAME: matching_user
-      SPRING_DATASOURCE_PASSWORD: matching_pass
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+    env_file:
+      - ./matching-service/.env
     networks: [tapride-net]
 
   # notification-service 
@@ -235,9 +221,8 @@ services:
         condition: service_healthy
     ports:
       - "8084:8080"
-    environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+    env_file:
+      - ./notification-service/.env
     networks: [tapride-net]
 
   frontend:
