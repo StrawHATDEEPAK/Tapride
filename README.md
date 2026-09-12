@@ -2,10 +2,7 @@
 
 > A distributed ride-booking platform demonstrating event-driven microservices, Kafka-based Saga orchestration, distributed transaction handling, fault tolerance, and production-grade observability.
 
-[![GitHub Repository](https://img.shields.io/badge/GitHub-TapRide--Backend-blue?style=flat&logo=github)](https://github.com/your-username/TapRide-Backend)
-
----
-
+[![Frontend](https://img.shields.io/badge/Frontend-TapRide-46E3B7?style=flat&logo=render&logoColor=white)](https://tapride-frontend.onrender.com)
 ## 🛠️ Tech Stack
 
 | Domain | Technologies |

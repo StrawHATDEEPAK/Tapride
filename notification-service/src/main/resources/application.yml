@@ -1,5 +1,5 @@
 server:
-  port: ${PORT:8080}
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
@@ -20,6 +20,11 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics
+
+      cors:
+        allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
+        allowed-methods: GET
+        allowed-headers: "*"    
   endpoint:
     health:
       show-details: always
@@ -31,7 +36,7 @@ management:
       probability: 1.0
   otlp:
     tracing:
-      endpoint: http://localhost:4318/v1/traces
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
 
 logging:
   pattern:

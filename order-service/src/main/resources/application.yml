@@ -1,5 +1,5 @@
 server:
-  port: ${PORT:8080}
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
@@ -14,7 +14,7 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
-      maximum-pool-size: 3
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:3}
 
   jpa:
     hibernate:
@@ -34,11 +34,19 @@ spring:
   jackson:
     default-property-inclusion: non_null
 
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
+
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus,metrics
+      cors:
+        allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
+        allowed-methods: GET
+        allowed-headers: "*"    
   endpoint:
     health:
       show-details: always
@@ -53,7 +61,7 @@ management:
       probability: 1.0
   otlp:
     tracing:
-      endpoint: http://localhost:4318/v1/traces
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
 
 resilience4j:
   circuitbreaker:

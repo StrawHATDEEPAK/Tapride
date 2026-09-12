@@ -1,19 +1,9 @@
 /**
  * Single client-side store. Every normalized WebSocket event flows through
  * applyEvent(); every renderer (feed list, status ladder, map) subscribes to
- * this instead of talking to the WebSocket directly. This is the "React
- * Context" shaped piece if this ever becomes a real React app later - the
- * store's public shape wouldn't need to change, only what consumes it.
- *
- * Deliberately simple: no persistence, no undo, just an in-memory Map plus
- * pub/sub via EventTarget (a real browser API, not a hand-rolled emitter).
+ * this instead of talking to the WebSocket directly.
  */
 
-// Ladder progression is driven ONLY by order-service's own event log - it's
-// the authoritative saga state machine. payment-service/matching-service also
-// publish their own copies of similar events, which would be redundant (and
-// arrive via a slightly different path) for driving the ladder - they're only
-// used here for DRIVER_LOCATION_UPDATED, which nothing else provides.
 const FAILURE_EVENTS = new Set([
     'RIDE_VALIDATION_FAILED', 'PAYMENT_FAILED', 'DRIVER_MATCH_FAILED', 'RIDE_CANCELLED',
 ]);
@@ -29,9 +19,6 @@ class RideStore extends EventTarget {
     applyEvent(event) {
         const { service, rideId, eventType, payload } = event;
 
-        // Driver position updates aren't part of the ladder - handled separately
-        // and dispatched as a lighter 'position' event so the map can update
-        // without forcing the whole feed/ladder to re-render every ~4 seconds.
         if (eventType === 'DRIVER_LOCATION_UPDATED') {
             const ride = this.rides.get(rideId);
             if (ride) {
@@ -42,11 +29,16 @@ class RideStore extends EventTarget {
             return;
         }
 
-        // Only order-service's own log drives the ladder (see comment above).
         if (service !== 'order-service') return;
 
         let ride = this.rides.get(rideId);
         if (!ride) {
+            const currentlySelected = this.selectedRideId ? this.rides.get(this.selectedRideId) : null;
+            const previousRideIsDone = currentlySelected && (currentlySelected.status === 'RIDE_COMPLETED' || currentlySelected.failed);
+            if (this.selectedRideId === null || previousRideIsDone) {
+                this.selectedRideId = rideId;
+            }
+
             ride = {
                 id: rideId,
                 pickup: { lat: payload.pickupLat, lng: payload.pickupLng },
@@ -60,9 +52,16 @@ class RideStore extends EventTarget {
                 seen: new Set(),
                 history: [],
                 createdAt: event.occurredAt,
+                // Baseline distance for the current leg, captured once when a
+                // leg begins - render-detail.js diffs current distance against
+                // this to compute the progress-bar percentage. Set below, at
+                // the moment DRIVER_MATCHED / RIDE_STARTED first appear.
+                legStartDistance: null,
             };
             this.rides.set(rideId, ride);
         }
+
+        const wasStarted = ride.seen.has('RIDE_STARTED');
 
         ride.seen.add(eventType);
         ride.status = eventType;
@@ -75,9 +74,27 @@ class RideStore extends EventTarget {
             ride.failReason = payload.reason ?? eventType;
         }
 
-        if (this.selectedRideId === null) this.selectedRideId = rideId; // auto-select the first ride seen
+        // Leg 1 baseline: distance from wherever the driver starts to pickup -
+        // captured the instant we're matched, using whatever position we have.
+        if (eventType === 'DRIVER_MATCHED' && ride.driverPos) {
+            ride.legStartDistance = haversine(ride.driverPos, ride.pickup);
+        }
+        // Leg 2 baseline: distance from pickup to dropoff, captured when the
+        // trip actually starts (driver has just arrived at pickup).
+        if (eventType === 'RIDE_STARTED') {
+            ride.legStartDistance = haversine(ride.pickup, ride.dropoff);
+        }
+
+        if (this.selectedRideId === null) this.selectedRideId = rideId;
 
         this.dispatchEvent(new CustomEvent('change', { detail: { rideId } }));
+
+        // Fired ONLY on the transition into RIDE_STARTED (not on every event
+        // for an already-started ride) - this is what render-map.js listens
+        // for to trigger the arrival-bounce animation exactly once.
+        if (!wasStarted && eventType === 'RIDE_STARTED') {
+            this.dispatchEvent(new CustomEvent('ride-started', { detail: { rideId } }));
+        }
     }
 
     select(rideId) {
@@ -89,10 +106,21 @@ class RideStore extends EventTarget {
         return this.selectedRideId ? this.rides.get(this.selectedRideId) : null;
     }
 
-    /** Rides ordered newest-first, for the feed list. */
     allRidesNewestFirst() {
         return [...this.rides.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }
 }
 
+/** Straight-line distance in km - same simplification the backend simulator itself uses. */
+function haversine(a, b) {
+    const R = 6371;
+    const toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const x = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 export const store = new RideStore();
+export { haversine };

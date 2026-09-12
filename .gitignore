@@ -34,6 +34,7 @@ frontend/js/config.js
 # Environment & Credentials
 .env
 .env.*
+.env.prod
 !.env.example
 
 # Kubernetes Secrets with live data
