@@ -20,7 +20,13 @@ COPY --from=build /app/matching-service/target/matching-service.jar app.jar
 USER tapride
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-jar", "app.jar"]
+# -Xmx256m / -Xss512k: Render's free tier caps containers at 512MB RAM total -
+# the JVM's own default heap sizing (up to 25% of container memory) leaves no
+# room for metaspace, thread stacks, or native/off-heap memory (Kafka client
+# buffers, Postgres driver, etc) once you add those on top. Explicit tuning
+# here is what makes this actually fit, not just "usually fits."
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xmx256m", "-Xss512k", \
+            "-XX:MaxMetaspaceSize=128m", "-jar", "app.jar"]
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
   CMD wget -qO- http://localhost:8080/actuator/health | grep -q '"status":"UP"' || exit 1
