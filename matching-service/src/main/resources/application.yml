@@ -41,7 +41,7 @@ spring:
 
 app:
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
 
 management:
   endpoints:
@@ -50,7 +50,7 @@ management:
         include: health,info,prometheus,metrics
 
       cors:
-        allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
+        allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:8085,http://tapride.local}
         allowed-methods: GET
         allowed-headers: "*"  
   endpoint:
