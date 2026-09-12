@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"name": "order-service",
+			"path": "order-service"
+		},
+		{
+			"name": "matching-service",
+			"path": "matching-service"
+		},
+		{
+			"name": "notification-service",
+			"path": "notification-service"
+		},
+		{
+			"name": "payment-service",
+			"path": "payment-service"
+		},
+		{
+			"name": "frontend",
+			"path": "frontend"
+		},
+		{
+			"name": "tapride",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
